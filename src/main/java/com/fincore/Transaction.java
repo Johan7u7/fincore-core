@@ -1,21 +1,23 @@
 package com.fincore;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
 public class Transaction {
     private final String id;
-    private final double amount;
-    private final TransactionType type; // Fuerte tipado
+    private final BigDecimal amount;
+    private final TransactionType type;
     private final LocalDateTime timestamp;
 
-    public Transaction(double amount, TransactionType type) {
-        if (amount <= 0) {
+    public Transaction(BigDecimal amount, TransactionType type) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Transaction amount must be strictly greater than zero.");
         }
-        
-        // Ya no necesitamos validar el texto, el Enum garantiza que solo sea DEPOSIT o WITHDRAWAL
+        if (type == null) {
+            throw new IllegalArgumentException("Transaction type cannot be null.");
+        }
 
         this.id = UUID.randomUUID().toString();
         this.amount = amount;
@@ -24,7 +26,7 @@ public class Transaction {
     }
 
     public String getId() { return id; }
-    public double getAmount() { return amount; }
+    public BigDecimal getAmount() { return amount; }
     public TransactionType getType() { return type; }
     public LocalDateTime getTimestamp() { return timestamp; }
 
@@ -43,7 +45,7 @@ public class Transaction {
 
     @Override
     public String toString() {
-        return String.format("Transaction[ID=%s, Amount=%.2f, Type=%s, Date=%s]",
-                id.substring(0, 8) + "...", amount, type, timestamp);
+        return String.format("Transaction[ID=%s, Amount=%s, Type=%s, Date=%s]",
+                id.substring(0, 8) + "...", amount.toPlainString(), type, timestamp);
     }
 }

@@ -1,31 +1,24 @@
 package com.fincore;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 public class LedgerService {
 
-    // Índice en memoria: cada cuenta tiene su lista histórica de transacciones
     private final Map<String, List<Transaction>> ledger = new HashMap<>();
 
-    /**
-     * Registra un depósito en la cuenta. Si la cuenta no existe, la inicializa.
-     */
-    public Transaction deposit(String accountId, double amount) {
+    public Transaction deposit(String accountId, BigDecimal amount) {
         Transaction tx = new Transaction(amount, TransactionType.DEPOSIT);
         recordTransaction(accountId, tx);
         return tx;
     }
 
-    /**
-     * Valida fondos disponibles antes de autorizar y registrar un retiro.
-     */
-    public Transaction withdraw(String accountId, double amount) {
-        double currentBalance = getBalance(accountId);
-        if (currentBalance < amount) {
+    public Transaction withdraw(String accountId, BigDecimal amount) {
+        BigDecimal currentBalance = getBalance(accountId);
+        if (currentBalance.compareTo(amount) < 0) {
             throw new InsufficientFundsException(
-                String.format("Overdraft blocked: Current balance is %.2f, attempted withdrawal of %.2f", 
-                              currentBalance, amount)
-            );
+                    String.format("Overdraft blocked: Current balance is %s, attempted withdrawal of %s",
+                            currentBalance.toPlainString(), amount.toPlainString()));
         }
 
         Transaction tx = new Transaction(amount, TransactionType.WITHDRAWAL);
@@ -33,26 +26,20 @@ public class LedgerService {
         return tx;
     }
 
-    /**
-     * Calcula el saldo neto en tiempo real sumando depósitos y restando retiros.
-     */
-    public double getBalance(String accountId) {
+    public BigDecimal getBalance(String accountId) {
         List<Transaction> history = ledger.getOrDefault(accountId, Collections.emptyList());
-        
-        double balance = 0.0;
+
+        BigDecimal balance = BigDecimal.ZERO;
         for (Transaction tx : history) {
             if (tx.getType() == TransactionType.DEPOSIT) {
-                balance += tx.getAmount();
+                balance = balance.add(tx.getAmount());
             } else if (tx.getType() == TransactionType.WITHDRAWAL) {
-                balance -= tx.getAmount();
+                balance = balance.subtract(tx.getAmount());
             }
         }
         return balance;
     }
 
-    /**
-     * Devuelve una copia inmutable del historial para proteger la integridad del libro contable.
-     */
     public List<Transaction> getHistory(String accountId) {
         List<Transaction> history = ledger.get(accountId);
         if (history == null) {
@@ -63,5 +50,33 @@ public class LedgerService {
 
     private void recordTransaction(String accountId, Transaction tx) {
         ledger.computeIfAbsent(accountId, k -> new ArrayList<>()).add(tx);
+    }
+
+    /**
+     * Ejecuta una transferencia atómica entre dos cuentas.
+     * Si falla el abono al destino, compensa automáticamente el débito del origen
+     * (Rollback).
+     */
+    public void transfer(String sourceAccountId, String destinationAccountId, BigDecimal amount) {
+        if (sourceAccountId == null || destinationAccountId == null) {
+            throw new IllegalArgumentException("Account IDs cannot be null.");
+        }
+        if (sourceAccountId.equals(destinationAccountId)) {
+            throw new IllegalArgumentException("Cannot transfer funds to the same account.");
+        }
+
+        // Paso 1: Débito de la cuenta origen (valida fondos y arroja
+        // InsufficientFundsException si no alcanza)
+        Transaction debitTx = withdraw(sourceAccountId, amount);
+
+        // Paso 2: Abono a la cuenta destino con guardia de compensación
+        try {
+            deposit(destinationAccountId, amount);
+        } catch (Exception e) {
+            // ROLLBACK: Compensar acreditando de vuelta el monto al origen
+            deposit(sourceAccountId, amount);
+            throw new IllegalStateException(
+                    "Transfer failed during destination credit. Rollback executed successfully.", e);
+        }
     }
 }
