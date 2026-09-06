@@ -1,0 +1,13 @@
+# Archivos y carpetas de compilación
+target/
+*.class
+
+# Entornos y editores
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Logs y temporales
+*.log
+
