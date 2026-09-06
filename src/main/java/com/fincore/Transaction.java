@@ -7,50 +7,31 @@ import java.util.UUID;
 public class Transaction {
     private final String id;
     private final double amount;
-    private final String type; // "DEPOSIT" or "WITHDRAWAL"
+    private final TransactionType type; // Fuerte tipado
     private final LocalDateTime timestamp;
 
-    public Transaction(double amount, String type) {
-        // Regla 1: El monto debe ser estrictamente positivo
+    public Transaction(double amount, TransactionType type) {
         if (amount <= 0) {
             throw new IllegalArgumentException("Transaction amount must be strictly greater than zero.");
         }
-
-        // Regla 2: Solo se aceptan tipos válidos
-        if (!"DEPOSIT".equalsIgnoreCase(type) && !"WITHDRAWAL".equalsIgnoreCase(type)) {
-            throw new IllegalArgumentException("Invalid transaction type. Allowed: DEPOSIT, WITHDRAWAL.");
-        }
+        
+        // Ya no necesitamos validar el texto, el Enum garantiza que solo sea DEPOSIT o WITHDRAWAL
 
         this.id = UUID.randomUUID().toString();
         this.amount = amount;
-        this.type = type.toUpperCase();
+        this.type = type;
         this.timestamp = LocalDateTime.now();
     }
 
-    // Solo métodos Getters (Inmutabilidad)
-    public String getId() {
-        return id;
-    }
+    public String getId() { return id; }
+    public double getAmount() { return amount; }
+    public TransactionType getType() { return type; }
+    public LocalDateTime getTimestamp() { return timestamp; }
 
-    public double getAmount() {
-        return amount;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public LocalDateTime getTimestamp() {
-        return timestamp;
-    }
-
-    // Contrato de identidad empresarial (Basado en el ID único)
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         Transaction that = (Transaction) o;
         return Objects.equals(id, that.id);
     }
