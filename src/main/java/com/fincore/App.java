@@ -2,23 +2,29 @@ package com.fincore;
 
 public class App {
     public static void main(String[] args) {
-        System.out.println("=== FinCore Engine Initialized ===");
+        System.out.println("=== FinCore Ledger Service Demo ===");
 
-        // 1. Transacción válida
-        Transaction tx1 = new Transaction(1500.50, TransactionType.DEPOSIT);
+        LedgerService service = new LedgerService();
+        String accountId = "ACC-001";
 
-        System.out.println("Success: " + tx1);
+        // 1. Depósito inicial
+        service.deposit(accountId, 1000.00);
+        System.out.println("Deposit: +1000.00 | Balance: " + service.getBalance(accountId));
 
-        // 2. Transacción válida
-        Transaction tx2 = new Transaction(300.00, TransactionType.WITHDRAWAL);
-        System.out.println("Success: " + tx2);
+        // 2. Retiro válido
+        service.withdraw(accountId, 450.00);
+        System.out.println("Withdrawal: -450.00 | Balance: " + service.getBalance(accountId));
 
-        // 3. Prueba de protección contra valores negativos
+        // 3. Intento de sobregiro (fondos insuficientes)
+        System.out.println("\nAttempting to withdraw 600.00 (Available: " + service.getBalance(accountId) + ")...");
         try {
-            System.out.println("\nAttempting invalid transaction (-500)...");
-            Transaction txInvalid = new Transaction(-500.00, TransactionType.DEPOSIT);
-        } catch (IllegalArgumentException ex) {
-            System.out.println("Blocked by domain rules: " + ex.getMessage());
+            service.withdraw(accountId, 600.00);
+        } catch (InsufficientFundsException e) {
+            System.out.println("Blocked by domain rules: " + e.getMessage());
         }
+
+        // 4. Verificación de balance final y auditoría
+        System.out.println("\nFinal verified balance: " + service.getBalance(accountId));
+        System.out.println("Transaction count: " + service.getHistory(accountId).size());
     }
 }
