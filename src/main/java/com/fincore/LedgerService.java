@@ -3,6 +3,9 @@ package com.fincore;
 import java.math.BigDecimal;
 import java.util.*;
 
+import org.springframework.stereotype.Service;
+
+@Service
 public class LedgerService {
 
     private final Map<String, List<Transaction>> ledger = new HashMap<>();

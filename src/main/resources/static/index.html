@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>FinCore - Monitor Transaccional</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-8">
+  <header class="max-w-6xl mx-auto mb-8 border-b border-slate-800 pb-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-emerald-400">FinCore Engine</h1>
+      <p class="text-slate-400 text-sm">Monitor de Saldos y Transferencias Atómicas en Tiempo Real</p>
+    </div>
+    <span class="px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-mono">
+      REST API: 8080 Active
+    </span>
+  </header>
+
+  <main class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+    <!-- PANEL 1: ALICE -->
+    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-xl flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-lg font-semibold text-slate-200">Usuario: Alice (ACC-001)</span>
+          <span id="bal-ACC-001" class="text-2xl font-mono font-bold text-emerald-400">$0.00</span>
+        </div>
+
+        <div class="space-y-3 mb-6 bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+          <div class="flex gap-2">
+            <input id="dep-ACC-001" type="number" placeholder="Monto ($)" class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:border-emerald-500">
+            <button onclick="deposit('ACC-001')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded text-sm transition">Depositar</button>
+          </div>
+          <div class="flex gap-2">
+            <input id="tr-ACC-001" type="number" placeholder="Transferir a Bob ($)" class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:border-cyan-500">
+            <button onclick="transfer('ACC-001', 'ACC-002')" class="bg-cyan-600 hover:bg-cyan-500 text-white font-medium px-4 py-1.5 rounded text-sm transition">Transferir &rarr;</button>
+          </div>
+        </div>
+
+        <h3 class="text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">Libro Mayor (Auditoría)</h3>
+        <ul id="hist-ACC-001" class="space-y-1.5 font-mono text-xs max-h-48 overflow-y-auto pr-1"></ul>
+      </div>
+    </div>
+
+    <!-- PANEL 2: BOB -->
+    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-xl flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-lg font-semibold text-slate-200">Usuario: Bob (ACC-002)</span>
+          <span id="bal-ACC-002" class="text-2xl font-mono font-bold text-emerald-400">$0.00</span>
+        </div>
+
+        <div class="space-y-3 mb-6 bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+          <div class="flex gap-2">
+            <input id="dep-ACC-002" type="number" placeholder="Monto ($)" class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:border-emerald-500">
+            <button onclick="deposit('ACC-002')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded text-sm transition">Depositar</button>
+          </div>
+          <div class="flex gap-2">
+            <input id="tr-ACC-002" type="number" placeholder="Transferir a Alice ($)" class="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:border-cyan-500">
+            <button onclick="transfer('ACC-002', 'ACC-001')" class="bg-cyan-600 hover:bg-cyan-500 text-white font-medium px-4 py-1.5 rounded text-sm transition">&larr; Transferir</button>
+          </div>
+        </div>
+
+        <h3 class="text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">Libro Mayor (Auditoría)</h3>
+        <ul id="hist-ACC-002" class="space-y-1.5 font-mono text-xs max-h-48 overflow-y-auto pr-1"></ul>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const API = 'http://localhost:8080/api';
+
+    async function refreshAccount(id) {
+      // 1. Obtener balance
+      const resBal = await fetch(`${API}/accounts/${id}/balance`);
+      const dataBal = await resBal.json();
+      document.getElementById(`bal-${id}`).innerText = `$${parseFloat(dataBal.balance).toFixed(2)}`;
+
+      // 2. Obtener historial
+      const resHist = await fetch(`${API}/accounts/${id}/history`);
+      const txs = await resHist.json();
+      const listEl = document.getElementById(`hist-${id}`);
+      listEl.innerHTML = txs.map(tx => {
+        const isDep = tx.type === 'DEPOSIT';
+        const color = isDep ? 'text-emerald-400' : 'text-rose-400';
+        const sign = isDep ? '+' : '-';
+        return `<li class="bg-slate-900 p-2 rounded flex justify-between border border-slate-800">
+          <span class="${color} font-semibold">${sign}$${tx.amount} (${tx.type})</span>
+          <span class="text-slate-500">${tx.timestamp.substring(11, 19)}</span>
+        </li>`;
+      }).reverse().join('');
+    }
+
+    async function deposit(id) {
+      const input = document.getElementById(`dep-${id}`);
+      const val = parseFloat(input.value);
+      if (!val || val <= 0) return alert('Monto inválido');
+
+      await fetch(`${API}/transactions/deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: id, amount: val })
+      });
+
+      input.value = '';
+      refreshAll();
+    }
+
+    async function transfer(source, dest) {
+      const input = document.getElementById(`tr-${source}`);
+      const val = parseFloat(input.value);
+      if (!val || val <= 0) return alert('Monto inválido');
+
+      const res = await fetch(`${API}/transactions/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceAccountId: source, destinationAccountId: dest, amount: val })
+      });
+
+      if (!res.ok) {
+        alert('Error en la transferencia (posible saldo insuficiente).');
+      }
+
+      input.value = '';
+      refreshAll();
+    }
+
+    function refreshAll() {
+      refreshAccount('ACC-001');
+      refreshAccount('ACC-002');
+    }
+
+    // Carga inicial
+    refreshAll();
+  </script>
+</body>
+</html>
