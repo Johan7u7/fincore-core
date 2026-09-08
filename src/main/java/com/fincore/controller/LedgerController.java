@@ -35,16 +35,18 @@ public class LedgerController {
 
     @PostMapping("/transactions/deposit")
     public ResponseEntity<Transaction> deposit(@RequestBody DepositRequest request) {
-        Transaction tx = ledgerService.deposit(request.getAccountId(), request.getAmount());
+        // Usamos request.accountId() en lugar de request.getAccountId()
+        Transaction tx = ledgerService.deposit(request.accountId(), request.amount());
         return ResponseEntity.ok(tx);
     }
 
     @PostMapping("/transactions/transfer")
     public ResponseEntity<Map<String, String>> transfer(@RequestBody TransferRequest request) {
+        // Usamos los métodos del record
         ledgerService.transfer(
-                request.getSourceAccountId(),
-                request.getDestinationAccountId(),
-                request.getAmount());
+                request.sourceAccountId(),
+                request.destinationAccountId(),
+                request.amount());
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "message", "Transfer executed successfully"));
     }
 }

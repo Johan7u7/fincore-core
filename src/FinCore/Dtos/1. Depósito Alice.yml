@@ -1,0 +1,30 @@
+info:
+  name: 1. Depósito Alice
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: |-
+    {
+      "accountId": "ACC-001",
+      "amount": 1000.00
+    {
+      "accountId": "ACC-001",
+      "amount": 1000.00
+    http://localhost:8080/api/transactions/deposit
+  body:
+    type: json
+    data: |-
+      {
+        "accountId": "ACC-001",
+        "amount": 1000.00
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+​

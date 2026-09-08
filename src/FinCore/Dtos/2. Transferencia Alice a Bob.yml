@@ -1,0 +1,24 @@
+info:
+  name: 2. Transferencia Alice a Bob
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/api/transactions/transfer
+  body:
+    type: json
+    data: |-
+      {
+        "sourceAccountId": "ACC-001",
+        "destinationAccountId": "ACC-002",
+        "amount": 350.50
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+​
