@@ -1,21 +1,29 @@
 package com.fincore;
 
-import java.math.BigDecimal;
-import java.util.*;
-
+import com.fincore.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
 
 @Service
 public class LedgerService {
 
-    private final Map<String, List<Transaction>> ledger = new HashMap<>();
+    private final TransactionRepository transactionRepository;
 
-    public Transaction deposit(String accountId, BigDecimal amount) {
-        Transaction tx = new Transaction(amount, TransactionType.DEPOSIT);
-        recordTransaction(accountId, tx);
-        return tx;
+    public LedgerService(TransactionRepository transactionRepository) {
+        this.transactionRepository = transactionRepository;
     }
 
+    @Transactional
+    public Transaction deposit(String accountId, BigDecimal amount) {
+        Transaction tx = new Transaction(accountId, amount, TransactionType.DEPOSIT);
+        return transactionRepository.save(tx);
+    }
+
+    @Transactional
     public Transaction withdraw(String accountId, BigDecimal amount) {
         BigDecimal currentBalance = getBalance(accountId);
         if (currentBalance.compareTo(amount) < 0) {
@@ -24,13 +32,13 @@ public class LedgerService {
                             currentBalance.toPlainString(), amount.toPlainString()));
         }
 
-        Transaction tx = new Transaction(amount, TransactionType.WITHDRAWAL);
-        recordTransaction(accountId, tx);
-        return tx;
+        Transaction tx = new Transaction(accountId, amount, TransactionType.WITHDRAWAL);
+        return transactionRepository.save(tx);
     }
 
+    @Transactional(readOnly = true)
     public BigDecimal getBalance(String accountId) {
-        List<Transaction> history = ledger.getOrDefault(accountId, Collections.emptyList());
+        List<Transaction> history = transactionRepository.findByAccountIdOrderByTimestampAsc(accountId);
 
         BigDecimal balance = BigDecimal.ZERO;
         for (Transaction tx : history) {
@@ -43,23 +51,13 @@ public class LedgerService {
         return balance;
     }
 
+    @Transactional(readOnly = true)
     public List<Transaction> getHistory(String accountId) {
-        List<Transaction> history = ledger.get(accountId);
-        if (history == null) {
-            return Collections.emptyList();
-        }
+        List<Transaction> history = transactionRepository.findByAccountIdOrderByTimestampAsc(accountId);
         return Collections.unmodifiableList(history);
     }
 
-    private void recordTransaction(String accountId, Transaction tx) {
-        ledger.computeIfAbsent(accountId, k -> new ArrayList<>()).add(tx);
-    }
-
-    /**
-     * Ejecuta una transferencia atómica entre dos cuentas.
-     * Si falla el abono al destino, compensa automáticamente el débito del origen
-     * (Rollback).
-     */
+    @Transactional
     public void transfer(String sourceAccountId, String destinationAccountId, BigDecimal amount) {
         if (sourceAccountId == null || destinationAccountId == null) {
             throw new IllegalArgumentException("Account IDs cannot be null.");
@@ -68,18 +66,7 @@ public class LedgerService {
             throw new IllegalArgumentException("Cannot transfer funds to the same account.");
         }
 
-        // Paso 1: Débito de la cuenta origen (valida fondos y arroja
-        // InsufficientFundsException si no alcanza)
-        Transaction debitTx = withdraw(sourceAccountId, amount);
-
-        // Paso 2: Abono a la cuenta destino con guardia de compensación
-        try {
-            deposit(destinationAccountId, amount);
-        } catch (Exception e) {
-            // ROLLBACK: Compensar acreditando de vuelta el monto al origen
-            deposit(sourceAccountId, amount);
-            throw new IllegalStateException(
-                    "Transfer failed during destination credit. Rollback executed successfully.", e);
-        }
+        withdraw(sourceAccountId, amount);
+        deposit(destinationAccountId, amount);
     }
 }

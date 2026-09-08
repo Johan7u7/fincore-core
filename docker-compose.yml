@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fincore-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: fincoredb
+      POSTGRES_USER: finuser
+      POSTGRES_PASSWORD: finpassword
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - fincore_pgdata:/var/lib/postgresql/data
+
+volumes:
+  fincore_pgdata:

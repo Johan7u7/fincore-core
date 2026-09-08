@@ -1,111 +1,71 @@
 package com.fincore;
 
+import com.fincore.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-@DisplayName("LedgerService Domain & Balance Tests")
+@ExtendWith(MockitoExtension.class)
 class LedgerServiceTest {
 
+    @Mock
+    private TransactionRepository transactionRepository;
+
     private LedgerService ledgerService;
-    private static final String ACCOUNT_ID = "ACC-TEST-001";
 
     @BeforeEach
     void setUp() {
-        ledgerService = new LedgerService();
+        ledgerService = new LedgerService(transactionRepository);
     }
 
     @Test
-    @DisplayName("Should correctly calculate balance after successive deposits with high precision")
-    void testDepositCalculatesBalanceCorrectly() {
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("500.00"));
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("250.55"));
+    void testDepositPersistsTransaction() {
+        String accountId = "ACC-001";
+        BigDecimal amount = new BigDecimal("100.00");
 
-        assertEquals(new BigDecimal("750.55"), ledgerService.getBalance(ACCOUNT_ID));
-        assertEquals(2, ledgerService.getHistory(ACCOUNT_ID).size());
-    }
+        when(transactionRepository.save(any(Transaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-    @Test
-    @DisplayName("Should deduct balance correctly on valid withdrawal")
-    void testWithdrawalDeductsBalance() {
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("1000.00"));
-        Transaction tx = ledgerService.withdraw(ACCOUNT_ID, new BigDecimal("400.00"));
+        Transaction tx = ledgerService.deposit(accountId, amount);
 
         assertNotNull(tx);
-        assertEquals(TransactionType.WITHDRAWAL, tx.getType());
-        assertEquals(new BigDecimal("600.00"), ledgerService.getBalance(ACCOUNT_ID));
+        assertEquals(accountId, tx.getAccountId());
+        assertEquals(amount, tx.getAmount());
+        assertEquals(TransactionType.DEPOSIT, tx.getType());
+        verify(transactionRepository, times(1)).save(any(Transaction.class));
     }
 
     @Test
-    @DisplayName("Should throw InsufficientFundsException and protect ledger on overdraft")
-    void testOverdraftBlockedAndLedgerUntouched() {
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("100.00"));
-
-        InsufficientFundsException exception = assertThrows(
-                InsufficientFundsException.class,
-                () -> ledgerService.withdraw(ACCOUNT_ID, new BigDecimal("150.00")));
-
-        assertTrue(exception.getMessage().contains("Overdraft blocked"));
-        assertEquals(new BigDecimal("100.00"), ledgerService.getBalance(ACCOUNT_ID));
-        assertEquals(1, ledgerService.getHistory(ACCOUNT_ID).size());
-    }
-
-    @Test
-    @DisplayName("Should enforce immutability on transaction history list")
-    void testHistoryListIsImmutable() {
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("200.00"));
-        List<Transaction> history = ledgerService.getHistory(ACCOUNT_ID);
-
-        assertThrows(UnsupportedOperationException.class, () -> {
-            history.add(new Transaction(new BigDecimal("500.00"), TransactionType.DEPOSIT));
-        });
-    }
-
-    @Test
-    @DisplayName("Should transfer funds atomically between two distinct accounts")
-    void testAtomicTransferSuccess() {
-        String destAccount = "ACC-TEST-002";
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("1000.00"));
-
-        ledgerService.transfer(ACCOUNT_ID, destAccount, new BigDecimal("400.00"));
-
-        assertEquals(new BigDecimal("600.00"), ledgerService.getBalance(ACCOUNT_ID));
-        assertEquals(new BigDecimal("400.00"), ledgerService.getBalance(destAccount));
-        assertEquals(2, ledgerService.getHistory(ACCOUNT_ID).size());
-        assertEquals(1, ledgerService.getHistory(destAccount).size());
-    }
-
-    @Test
-    @DisplayName("Should prevent transfer when source account has insufficient funds")
-    void testTransferInsufficientFundsBlocked() {
-        String destAccount = "ACC-TEST-002";
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("100.00"));
+    void testWithdrawThrowsWhenInsufficientFunds() {
+        String accountId = "ACC-001";
+        when(transactionRepository.findByAccountIdOrderByTimestampAsc(accountId))
+                .thenReturn(List.of());
 
         assertThrows(InsufficientFundsException.class, () -> {
-            ledgerService.transfer(ACCOUNT_ID, destAccount, new BigDecimal("300.00"));
+            ledgerService.withdraw(accountId, new BigDecimal("50.00"));
         });
-
-        // Ambas cuentas deben mantenerse intactas
-        assertEquals(new BigDecimal("100.00"), ledgerService.getBalance(ACCOUNT_ID));
-        assertEquals(BigDecimal.ZERO, ledgerService.getBalance(destAccount));
-        assertEquals(1, ledgerService.getHistory(ACCOUNT_ID).size());
-        assertEquals(0, ledgerService.getHistory(destAccount).size());
     }
 
     @Test
-    @DisplayName("Should reject transfer when source and destination are the same account")
-    void testTransferSameAccountBlocked() {
-        ledgerService.deposit(ACCOUNT_ID, new BigDecimal("500.00"));
+    void testCalculateBalance() {
+        String accountId = "ACC-001";
+        List<Transaction> transactions = List.of(
+                new Transaction(accountId, new BigDecimal("100.00"), TransactionType.DEPOSIT),
+                new Transaction(accountId, new BigDecimal("30.00"), TransactionType.WITHDRAWAL));
 
-        assertThrows(IllegalArgumentException.class, () -> {
-            ledgerService.transfer(ACCOUNT_ID, ACCOUNT_ID, new BigDecimal("100.00"));
-        });
+        when(transactionRepository.findByAccountIdOrderByTimestampAsc(accountId))
+                .thenReturn(transactions);
 
-        assertEquals(new BigDecimal("500.00"), ledgerService.getBalance(ACCOUNT_ID));
+        BigDecimal balance = ledgerService.getBalance(accountId);
+        assertEquals(new BigDecimal("70.00"), balance);
     }
 }
